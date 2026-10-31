@@ -1,0 +1,13 @@
+# secrets - NEVER commit these (the repo is public)
+.env
+*.json.key
+*keypair*.json
+id.json
+wallet*.json
+# generated
+.cache/
+report.json
+__pycache__/
+*.pyc
+node_modules/
+.venv/

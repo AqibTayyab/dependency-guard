@@ -1,0 +1,10 @@
+{
+  "name": "trap-app",
+  "version": "1.0.0",
+  "description": "Looks clean: three harmless-looking dependencies. The trap is deeper in the tree.",
+  "dependencies": {
+    "harmless-utils": "^1.0.0",
+    "lodash": "4.17.21",
+    "tiny-logger": "^1.2.0"
+  }
+}
