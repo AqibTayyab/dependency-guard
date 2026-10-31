@@ -9,7 +9,7 @@
 - [ ] Phase 4 - Integrated with Person B's Snowflake + Solana code
 - [x] Phase 5 - pytest suite, 47 tests green (written with Claude)
 - [ ] Phase 6 - Streamlit UI (optional)
-- [ ] Phase 7 - README sections + final checks
+- [x] Phase 7 - README sections + final checks (fresh clone: scan OK, 47 tests pass, no secrets found)
 
 ## Person B
 - [ ] Solana: agent registered on devnet, memo tx works
