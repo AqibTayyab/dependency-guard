@@ -7,7 +7,7 @@
 - [x] Phase 2 - Live npm/PyPI registries (written with Claude)
 - [x] Phase 3 - More inert fixtures (written with Claude)
 - [ ] Phase 4 - Integrated with Person B's Snowflake + Solana code
-- [ ] Phase 5 - pytest suite, 15+ tests green (Copilot)
+- [x] Phase 5 - pytest suite, 47 tests green (written with Claude)
 - [ ] Phase 6 - Streamlit UI (optional)
 - [ ] Phase 7 - README sections + final checks
 
