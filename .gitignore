@@ -1,0 +1,15 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*keypair*.json
+id.json
+*.pem
+
+# Caches and dependencies
+.cache/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
