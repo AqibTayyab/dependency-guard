@@ -1,0 +1,1 @@
+{"scan_id":"TEST-not-a-real-scan","ecosystem":"npm","input_file":"fixtures/trap-app/package.json","summary":{"verdict":"BLOCK","score":100}}
