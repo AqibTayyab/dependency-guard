@@ -1,0 +1,15 @@
+{
+  "name": "extra-app",
+  "version": "1.0.0",
+  "description": "5 flawed + 3 clean-control packages for detector tests (inert).",
+  "dependencies": {
+    "ui-kit-core": "1.0.0",
+    "fast-resize-kit": "1.0.2",
+    "legacy-date-fmt": "3.1.0",
+    "axois": "1.0.0",
+    "build-cache-helper": "0.2.1",
+    "date-fmt-lite": "2.0.0",
+    "node-version-check": "1.3.0",
+    "http-client-lite": "4.2.0"
+  }
+}
