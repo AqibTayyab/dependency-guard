@@ -1,0 +1,13 @@
+{
+  "name": "Dependency Guard Agent",
+  "symbol": "DEPGUARD",
+  "description": "Automated dependency safety and vulnerability audit agent on Solana",
+  "image": "https://raw.githubusercontent.com/AqibTayyab/dependency-guard/main/assets/logo.png",
+  "external_url": "https://github.com/AqibTayyab/dependency-guard",
+  "services": [
+    {
+      "name": "audit-logger",
+      "endpoint": "https://github.com/AqibTayyab/dependency-guard"
+    }
+  ]
+}
