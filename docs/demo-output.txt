@@ -1,0 +1,44 @@
+
+Dependency Guard - trap-app (npm) - 9 packages
+
+harmless-utils@1.0.0  ->  OK (0)
+lodash@4.17.21  ->  OK (0)
+tiny-logger@1.2.0  ->  OK (0)
+  string-helpers@2.1.0  ->  OK (0)
+  acme-telemetry@3.0.0  ->  BLOCK (95)
+  fast-cacher@0.0.3  ->  REVIEW (45)
+    colour-parse@0.4.2  ->  OK (0)
+    lodahs@1.0.0  ->  REVIEW (35)
+      flatmap-stream@0.1.1  ->  BLOCK (100)
+
+=== FINDINGS ===
+
+[BLOCK] npm:acme-telemetry@3.0.0  (score 95)
+  path: trap-app -> harmless-utils@1.0.0 -> acme-telemetry@3.0.0
+  - install_time_execution (+25): postinstall script runs: node scripts/setup.js
+  - credential_access (+30): dumps ALL environment variables
+  - network_in_install (+25): install-time code makes a network call (fetch)
+  - publish_anomaly (+15): package first published only 6 days ago; maintainer changed before this release
+  explanation [cache]: This package is blocked because it executes arbitrary code during installation. The setup script dumps all environment variables and makes a network call to an external collector.
+  what to do: Immediately remove `acme-telemetry` from your dependencies and investigate why this package is running setup scripts.
+
+[REVIEW] npm:fast-cacher@0.0.3  (score 45)
+  path: trap-app -> tiny-logger@1.2.0 -> fast-cacher@0.0.3
+  - obfuscation (+25): decodes hidden data and executes it (eval/exec + base64)
+  - prompt_injection_attempt (+20): text aimed at AI reviewers: 'ignore previous instructions'
+  explanation [cache]: This package contains dangerous code that decodes a Base64 string and executes it using `eval()`. This is a critical vulnerability allowing an attacker to run arbitrary code on your system.
+  what to do: Immediately remove or replace the `fast-cacher` dependency. If replacement isn't possible, isolate the package and audit all code paths that interact with it.
+
+[REVIEW] npm:lodahs@1.0.0  (score 35)
+  path: trap-app -> harmless-utils@1.0.0 -> string-helpers@2.1.0 -> lodahs@1.0.0
+  - typosquat (+35): name is very close to popular package 'lodash'
+  explanation [cache]: This dependency uses a name very similar to the popular 'lodash' package, which is a common typosquatting tactic.
+  what to do: Verify the exact package name and ensure you are intentionally using 'lodahs'. If unsure, check the package's source and official repository.
+
+[BLOCK] npm:flatmap-stream@0.1.1  (score 100)
+  path: trap-app -> harmless-utils@1.0.0 -> string-helpers@2.1.0 -> colour-parse@0.4.2 -> flatmap-stream@0.1.1
+  - known_malicious (+100): listed as MALWARE in vulnerability data (SIMULATED-DEMO-1)
+  explanation [cache]: The dependency `flatmap-stream` has been flagged as known malware based on reputation data.
+  what to do: Immediately remove `flatmap-stream` from your project dependencies and replace it with a vetted, secure alternative.
+
+Verdict: BLOCK   report: report.json   sha256: 9223dc70ee128799...
