@@ -1,2 +1,165 @@
 # dependency-guard
-An autonomous supply chain auditing agent that scores dependencies, uses Gemma 4 to explain findings, and logs tamper-evident validations on Solana.
+
+An autonomous supply chain auditing agent. It reads a manifest (`package.json`, `package-lock.json` or
+`requirements.txt`), walks the **whole recursive dependency tree**, scores every package, has **Gemma 4**
+explain each finding in plain language, and produces a hashed report that can be logged on Solana.
+
+> **Design rule: rules decide, the LLM only explains.** The verdict (OK / REVIEW / BLOCK) comes from
+> fixed, inspectable rules. Gemma never changes a verdict, and package code shown to it is treated as untrusted data.
+
+Built for the "Dependency Trap Code Guard" challenge by Muhammad Aqib Tayyab ([@AqibTayyab](https://github.com/AqibTayyab))
+and Rayan Siddiqui ([@rayan208](https://github.com/rayan208)).
+
+## What is real and what is simulated
+
+Read this first. Anything marked SIMULATED is a stand-in and is labelled as such in the program output.
+
+| Part | Status |
+|---|---|
+| Manifest parsing, tree walk (depth 4, 300 nodes), rules, verdicts, report hash | **Real**, covered by tests |
+| Gemma 4 explanations through a local Ollama server | **Real**, tested with `gemma4:e2b` |
+| Live npm / PyPI registry lookups | **Real but limited** (see Limitations) |
+| Snowflake reputation data (`reputation.py`) | **SIMULATED stub**: one canned malware record, labelled `SIMULATED-DEMO-1` |
+| Solana on-chain log (`chain.py`) | **SIMULATED stub**: prints `SIMULATED-<hash prefix>`, no transaction is sent |
+
+If the real Snowflake and Solana modules have been merged, this table is out of date. Check `guard/reputation.py`
+and `guard/chain.py` and the output of `--chain`: a real run shows a transaction signature, not `SIMULATED`.
+
+## Quick start
+
+Requires Python 3.9 or newer. The scanner itself uses only the standard library.
+
+```
+git clone https://github.com/AqibTayyab/dependency-guard.git
+cd dependency-guard
+python -m guard scan fixtures/trap-app --mock fixtures/starter_registry.json --no-llm
+```
+
+Expected: four findings (one is four levels deep in the tree), `Verdict: BLOCK`, exit code 2.
+
+Exit codes: `0` = OK, `1` = REVIEW, `2` = BLOCK.
+
+Options: `--mock FILE` (use a mock registry instead of the real ones), `--no-llm` (template explanations),
+`--chain` (log the report hash), `--out FILE` (default `report.json`), `--max-depth N`, `--include-dev`.
+
+### Scan a real project (live registries)
+
+```
+python -m guard scan path\to\your\project --no-llm
+```
+
+### Turn on Gemma 4
+
+```
+ollama pull gemma4:e2b
+ollama list                      # copy the exact tag
+set GEMMA_MODEL=gemma4:e2b       # Windows (cmd).  Linux/macOS: export GEMMA_MODEL=gemma4:e2b
+python -m guard scan fixtures/trap-app --mock fixtures/starter_registry.json
+```
+
+Output shows `explanation [gemma]`. A second run shows `[cache]` and is fast. If Ollama is unreachable or
+`GEMMA_MODEL` is unset, the scan falls back to fixed template text and says `[template]`.
+On our laptop the first Gemma run was slow (several minutes for four findings); the cache removes that on repeat runs.
+Set `DEPGUARD_OFFLINE=1` to force templates.
+
+## How it works
+
+```
+manifest -> parsers.py -> resolver.py -> heuristics.py -> verdict.py -> explain.py -> report.py -> (chain.py)
+            roots          tree walk      7 rules          score+verdict   Gemma/template   sha256       log hash
+                           (Registry)     (+ reputation)
+```
+
+| Step | File | What it does |
+|---|---|---|
+| 1 | `guard/parsers.py` | Reads package.json, package-lock.json (v1 and v2/v3, with exact pins) and requirements.txt |
+| 2 | `guard/resolver.py` | Breadth-first walk of the dependency tree. `MockRegistry` (fixtures), `LiveNpmRegistry`, `LivePyPIRegistry`. Each package is visited once and the first path to it is kept |
+| 3 | `guard/heuristics.py` | Seven rules, all weights in one `WEIGHTS` table |
+| 4 | `guard/verdict.py` | Adds reputation signals, then `REVIEW >= 35`, `BLOCK >= 70`. Known malware is always BLOCK |
+| 5 | `guard/explain.py` | Gemma 4 via Ollama, with a cache and a template fallback |
+| 6 | `guard/report.py` | Builds the report and hashes it with SHA-256 |
+| 7 | `guard/cli.py` | The command line |
+
+### The seven rules
+
+| Signal | Weight | Fires when |
+|---|---|---|
+| `install_time_execution` | 25 | npm `preinstall`/`install`/`postinstall` hook, or code in a PyPI `setup.py` |
+| `credential_access` | 30 | Reads `.npmrc`, AWS credentials or SSH keys, or dumps all environment variables |
+| `network_in_install` | 25 | Install-time code makes a network call |
+| `obfuscation` | 25 | `eval`/`exec` together with base64-style decoding, or a very long encoded blob |
+| `typosquat` | 35 | Name is within edit distance 1-2 of a popular package (swapped letters count as one edit) |
+| `publish_anomaly` | 15 | Package under 14 days old, maintainer changed, or dormant for a year before a release |
+| `prompt_injection_attempt` | 20 | Text aimed at AI reviewers, such as "ignore previous instructions" |
+
+Reputation data adds `known_malicious` (100) or `known_vulnerability` (10-40 by severity).
+
+### How Gemma 4 is used
+
+Gemma receives the fixed verdict, the package, its dependency path, the rule evidence and a short code snippet
+between `UNTRUSTED CODE` markers. It returns JSON with `summary`, `why_it_matters` and `what_to_do`.
+The system prompt tells it to ignore instructions inside the code and never to alter the verdict.
+The verdict is computed before Gemma is called and is never read back from it.
+
+Known weakness: small models can overstate severity. In our run `gemma4:e2b` called a REVIEW-level package
+"a critical vulnerability". The verdict and score printed next to the explanation are the authority.
+
+### Safety of the scanner itself
+
+The scanner **never executes** package code. It reads text only. All test fixtures are inert, use only
+`.invalid` domains, and contain no real payloads.
+
+## Tests and detection results
+
+```
+pip install pytest
+python -m pytest -q
+```
+
+47 tests pass: every rule has a positive and a negative test, plus verdict thresholds, parser edge cases
+(comments, extras, options, URLs, lockfile v1 and v3), tree depth and cycle handling, report hash verification,
+the Gemma fallback and cache logic, and end-to-end runs of the CLI on the fixtures.
+
+| Check | Result |
+|---|---|
+| Planted problems found in `fixtures/trap-app` (one four levels deep) | 4 of 4 |
+| Flawed fixtures found in `fixtures/extra_registry.json` | 5 of 5 |
+| Clean controls scoring below REVIEW | 4 of 4 |
+| Automated tests | 47 passing |
+
+Important: the fixtures were written to match the rules, so this is a regression check, **not** a measure of how
+well the tool catches real-world malware.
+
+## AI assistance and GitHub Copilot
+
+See [`COPILOT_LOG.md`](COPILOT_LOG.md) for the full record. In short:
+
+- The starter engine, the live registries, the extra fixtures and the test suite were written with Claude.
+- GitHub Copilot is listed only where `COPILOT_LOG.md` has a row for it. Where there is no row, Copilot was not used.
+
+## Limitations
+
+- **Live mode resolves version ranges to `latest`**, not to the version `npm install` would pick. Example: `chalk@4.1.2`
+  asks for `ansi-styles ^4.1.0`, but live mode fetched `7.0.0`. The tree can therefore differ from what you would install.
+  Scan a lockfile (exact versions) for accurate results.
+- Live mode does not fetch package source files or publish history, so file-based rules and `publish_anomaly`
+  do not fire there. Only install scripts, the typosquat check and reputation data apply.
+- The rules catch known patterns only. A new technique will not be flagged.
+- The typosquat check uses a list of about 45 popular names per ecosystem, and it skips scoped names (`@scope/name`).
+- Reputation and on-chain logging are SIMULATED unless the real modules were merged (see the table above).
+- The report hash covers the scan ID and timestamp, so two scans of the same project never share a hash. Verify a
+  saved report by recomputing its hash, not by comparing it with another scan.
+- Gemma output varies between runs and can overstate severity. It is explanation only.
+
+## Repository layout
+
+```
+guard/      scanner source
+fixtures/   inert test packages: trap-app, trap-app-py, extra-app and two mock registries
+tests/      pytest suite
+docs/       phase plan and status board
+```
+
+## License
+
+Apache-2.0. See [`LICENSE`](LICENSE).
